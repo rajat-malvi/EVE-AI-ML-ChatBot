@@ -36,12 +36,12 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 model = SentenceTransformer('paraphrase-distilroberta-base-v1')
 
 # Initialize Groq API
-groq_client = Groq(api_key="gsk_27R9S9Tw40Le2dfgSkxKWGdyb3FY6BT5xzRTge8lgznSgSJCj")
+groq_client = Groq(api_key="")
 print(os.getenv("GROQ_API_KEY"))
 
 #  genrative model  using Gemini API
 def genrative_model(train_text,query):
-    GOOGLE_API_KEY = "AIzaSyBWbxD6T1RZU45V3EerkMnNjwU7w8r5NL0"
+    GOOGLE_API_KEY = ""
     genai.configure(api_key=GOOGLE_API_KEY)
 
     model = genai.GenerativeModel('gemini-pro')
