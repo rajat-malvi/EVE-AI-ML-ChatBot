@@ -3,17 +3,17 @@ import re
 import csv
 import ast
 import os
-import pickle
-import shutil
-from sentence_transformers import SentenceTransformer
-import csv
-import pickle
-import multiprocessing
-from concurrent.futures import ProcessPoolExecutor
-import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
+# import logging
 
-model = SentenceTransformer('paraphrase-distilroberta-base-v1')
+# Configure logging
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format="%(asctime)s - %(levelname)s - %(message)s",
+#     handlers=[logging.FileHandler("pipeline.log"), logging.StreamHandler()]
+# )
+# logger = logging.getLogger(__name__)
+
+
 
 # ETL - Extract Phase
 def pdf_to_latex(pdf_path, start_page, end_page,tex_output_path):
@@ -74,8 +74,34 @@ def remove_specific_lines(file_path, output_path):
     print("Specific LaTeX commands removed and cleaned content saved. in " ,output_path)
 
 
+# 3 remove page number and lines
+# def remove_page_number_lines(input_file, output_file):
+    # with open(input_file, 'r', encoding='utf-8') as file:
+    #     lines = file.readlines()
+
+    # cleaned_lines = []
+    # page_number = None
+
+    # for line in lines:
+    #     # Remove repetitive dots from the line
+    #     # line = remove_repeated_dots(line)
+
+    #     page_match = re.match(r'% Page (\d+)', line)
+    #     if page_match:
+    #         page_number = page_match.group(1)
+    #         cleaned_lines.append(line)
+    #         continue
+
+    #     if page_number is not None and re.match(rf'^{page_number}$', line.strip()):
+    #         continue
+
+    #     cleaned_lines.append(line)
+
+    # with open(output_file, 'w', encoding='utf-8') as file:
+    #     file.writelines(cleaned_lines)
 
 def remove_page_number_lines(input_file, output_file):
+    import re  # Ensure the `re` module is imported if not already
     def remove_repeated_dots(line):
         # Assuming this function is defined elsewhere to remove repeated dots
         return re.sub(r'\.{2,}', '.', line)  # Example implementation
@@ -139,14 +165,20 @@ def process_tex_file(file_path, headings, output_path):
 
     for i in range(len(lines)):
         current_line = lines[i].strip()
+
+
         if current_line.endswith('.'):
             continue
+
         if match_heading(current_line, headings):
             lines_to_remove.append(i)
             # print(f"Removing line {i}: {lines[i].strip()}")
+
+
             if i > 0 and is_number_line(lines[i - 1]) and not lines[i - 1].strip().endswith('.'):
                 lines_to_remove.append(i - 1)
                 # print(f"Removing adjacent number line {i-1}: {lines[i - 1].strip()}")
+
             if i < len(lines) - 1 and is_number_line(lines[i + 1]) and not lines[i + 1].strip().endswith('.'):
                 lines_to_remove.append(i + 1)
                 # print(f"Removing adjacent number line {i+1}: {lines[i + 1].strip()}")
@@ -233,7 +265,7 @@ def get_topic_info(page_number,topics):
             return topic
     return 'Null'
 
-def add_additional_info(input_file_path, output_file_path, headings, topics, book_name,book_auther):
+def add_additional_info(input_file_path, output_file_path, headings, topics, book_name,book_auther,book_url):
     paragraphs = []
     
     with open(input_file_path, 'r', encoding='utf-8') as file:
@@ -267,7 +299,7 @@ def add_additional_info(input_file_path, output_file_path, headings, topics, boo
         # change and make it variables
         paragraph['Book Name'] = book_name
         paragraph['Book Author'] = book_auther
-        # paragraph['Book URL'] = book_url
+        paragraph['Book URL'] = book_url
     
     # print("finaly peragraph start from ",paragraphs[0],"\n")
     with open(output_file_path, 'w', encoding='utf-8') as file:
@@ -464,98 +496,12 @@ def txt_to_csv(input_file, output_file):
     fieldnames = sorted(all_keys)
     with open(output_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
+        writer.writeheader()    
 
         for item in data:
             writer.writerow(item)
 
     print(f"CSV file has been created: {output_file}")
-
-# ---------------------------------------------------------------------------------------pkl--temp ---------------------------------------------------------
-def process_csv_chunk(chunk):
-    """
-    Processes a chunk of rows, generating embeddings for each row.
-    """
-    embeddings = []
-    for row in chunk:
-        embedding = compute_embedding(row['Text'])
-        embeddings.append({
-            "book_author": row['Book Author'],
-            "book_name": row['Book Name'],
-            # "book_url": row['Book URL'],
-            "chapter_name": row['Chapter Name'],
-            "chapter_number": row['Chapter Number'],
-            "page": int(row['Page']),
-            "paragraph": int(row['Paragraph']),
-            "text": row['Text'],
-            "topic": row['Topic'],
-            "embedding": embedding
-        })
-    return embeddings
-
-
-def compute_embedding(text):
-    return model.encode(text).tolist()
-
-
-def retrieve_relevant_data(pkl_file, query, top_n=5):
-    """
-    Simple IR pipeline to retrieve the most relevant data based on cosine similarity.
-    """
-    # Load the data with embeddings
-    with open(pkl_file, 'rb') as f:
-        data = pickle.load(f)
-
-    # Generate embedding for the query
-    query_embedding = compute_embedding(query)
-
-    # Calculate cosine similarities
-    similarities = []
-    for item in data:
-        similarity = cosine_similarity([query_embedding], [item['embedding']])[0][0]
-        similarities.append((similarity, item))
-
-    # Sort by similarity score and retrieve the top N results
-    sorted_results = sorted(similarities, key=lambda x: x[0], reverse=True)
-    return [result[1] for result in sorted_results[:top_n]]
-
-
-def process_csv_file_to_pkl(csv_file, pkl_output_file, batch_size=1000):
-    
-    data_with_embeddings = []
-
-    with open(csv_file, 'r', encoding='utf-8') as file:
-        csvreader = csv.DictReader(file)
-        chunk = []
-        for i, row in enumerate(csvreader):
-            chunk.append(row)
-            if len(chunk) == batch_size:
-                with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-                    results = list(executor.map(process_csv_chunk, [chunk]))
-
-                # Flatten the results and append to the main list
-                flattened_results = [item for sublist in results for item in sublist]
-                data_with_embeddings.extend(flattened_results)
-
-                chunk = []
-
-        # Process remaining rows
-        if chunk:
-            with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-                results = list(executor.map(process_csv_chunk, [chunk]))
-
-            flattened_results = [item for sublist in results for item in sublist]
-            data_with_embeddings.extend(flattened_results)
-
-    # Save the data with embeddings to a .pkl file
-    with open(pkl_output_file, 'wb') as f:
-        pickle.dump(data_with_embeddings, f)
-
-    print(f"Embeddings saved to PKL file: {pkl_output_file}")
-
-
-
-
 
 
 def topics_extrection(pdf_path, output_tex, start_page, end_page,tex_file_path_for_heading):
@@ -621,7 +567,7 @@ def headings_classification(tex_file_path_for_heading,topics_arr,heading):
 
 
 # Main Pipeline Execution
-def execute_pipeline(pdf_path, output_tex, start_page, end_page, csv_output_path, topics_start,topics_end,tex_file_path_for_heading, book_name, book_auther,pkl_path):
+def execute_pipeline(pdf_path, output_tex, start_page, end_page, csv_output_path, topics_start,topics_end,tex_file_path_for_heading, book_name, book_auther, book_url):
     # Step 1: Convert PDF to LaTeX
     pdf_to_latex(pdf_path,start_page,end_page,output_tex)
 
@@ -638,29 +584,12 @@ def execute_pipeline(pdf_path, output_tex, start_page, end_page, csv_output_path
     process_tex_file(output_tex, [entry[2] for entry in topics_arr],output_tex)
 
     read_tex_file(output_tex, output_tex)
-    add_additional_info(output_tex, output_tex, headings, topics_arr, book_name, book_auther)
+    add_additional_info(output_tex, output_tex, headings, topics_arr, book_name, book_auther, book_url)
     
     # Step 3: Save cleaned text to CSV
     txt_to_csv(output_tex, csv_output_path)
-    print("csv_output_path ", csv_output_path, "pkl_path", pkl_path)
-    process_csv_file_to_pkl(csv_output_path,pkl_path)
 
-def cleanup_directory(directory_path):
-    """
-    Deletes all files in the specified directory.
-    """
-    for file_name in os.listdir(directory_path):
-        file_path = os.path.join(directory_path, file_name)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print(f"Failed to delete {file_path}. Reason: {e}")
-
-
-def process_pdfs_in_folder(folder_path, tex_file_path_for_heading, form_data):
+def process_pdfs_in_folder(folder_path, tex_file_path_for_heading):
     # Create an output folder for CSV files
     csv_output_folder = os.path.join(folder_path, "csv_outputs")
     os.makedirs(csv_output_folder, exist_ok=True)
@@ -669,10 +598,6 @@ def process_pdfs_in_folder(folder_path, tex_file_path_for_heading, form_data):
     tex_output_folder = os.path.join(folder_path, "tex_files")
     os.makedirs(tex_output_folder, exist_ok=True)
 
-    # Create an output folder for pickle files
-    pkl_output_folder = os.path.join(folder_path, "pkl_file")
-    os.makedirs(pkl_output_folder, exist_ok=True)
-
     # Iterate through all PDF files in the folder
     for file_name in os.listdir(folder_path):
         if file_name.endswith(".pdf"):
@@ -680,7 +605,6 @@ def process_pdfs_in_folder(folder_path, tex_file_path_for_heading, form_data):
             base_name = os.path.splitext(file_name)[0]
             csv_output_path = os.path.join(csv_output_folder, f"{base_name}.csv")
             tex_output_path = os.path.join(tex_output_folder, f"{base_name}.tex")
-            pkl_file_path = os.path.join(pkl_output_folder, "current.pkl")
 
             # Check if the CSV already exists
             if os.path.exists(csv_output_path):
@@ -689,20 +613,20 @@ def process_pdfs_in_folder(folder_path, tex_file_path_for_heading, form_data):
 
             print(f"\nProcessing new PDF: {file_name}")
 
-            # Get parameters from form_data
-            topics_start = form_data["chapter_start_page"]
-            topics_end = form_data["chapter_end_page"]
-            start_page = form_data["content_start_page"]
-            end_page = form_data["content_end_page"]
-            book_name = form_data["book_name"]
-            book_author = form_data["author_name"]
+            # Prompt user for input parameters for each PDF
             
+            book_name = input("Enter the book name: ")
+            book_author = input("Enter the book author: ")
+            topics_start = int(input(f"Enter the topics start index for '{file_name}': "))
+            topics_end = int(input(f"Enter the topics end index for '{file_name}': "))
+            start_page = int(input(f"Enter the start page for '{file_name}': "))
+            end_page = int(input(f"Enter the end page for '{file_name}': "))+start_page
+            book_url = input("Enter the book URL: ")
 
-            # pkl_file_path = "../uploads/pkl_file/current.pkl"
             # Execute the ETL pipeline for the current PDF
             execute_pipeline(
                 pdf_path,
-                tex_output_path,
+                tex_output_path,  # Store the .tex file in the dedicated folder
                 start_page,
                 end_page,
                 csv_output_path,
@@ -711,17 +635,17 @@ def process_pdfs_in_folder(folder_path, tex_file_path_for_heading, form_data):
                 tex_file_path_for_heading,
                 book_name,
                 book_author,
-                pkl_file_path
+                book_url
             )
-    
+
     print(f"\nAll new PDFs processed. CSV files are saved in: {csv_output_folder}")
     print(f".tex files are saved in: {tex_output_folder}")
 
 
-# # Run the pipeline
-# if __name__ == '__main__':
-#     folder_path = "./"
-#     tex_file_path_for_heading = "./heading_elements.tex"
+# Run the pipeline
+if __name__ == '__main__':
+    folder_path = "./"
+    tex_file_path_for_heading = "./heading_elements.tex"
 
     # Process all new PDFs in the folder
-    # process_pdfs_in_folder(folder_path, tex_file_path_for_heading)
+    process_pdfs_in_folder(folder_path, tex_file_path_for_heading)

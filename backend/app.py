@@ -25,7 +25,7 @@ import pandas as pd
 
 # Initialize Flask app and enable CORS
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes, allowing communication with React frontend
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE"], "allow_headers": "*"}})
 
 
 # Load SBERT model
@@ -34,8 +34,9 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # Load SBERT model
 model = SentenceTransformer('paraphrase-distilroberta-base-v1')
+
 # Initialize Groq API
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+groq_client = Groq(api_key="gsk_27R9S9Tw40Le2dfgSkxKWGdyb3FY6BT5xzRTge8lgznSgSJCj")
 print(os.getenv("GROQ_API_KEY"))
 
 #  genrative model  using Gemini API
@@ -385,11 +386,9 @@ def chat():
     else:
         print("Database already initialized.")
 
-    # print("\nSearching for relevant paragraphs...\n")
     top_results = query_paragraphs(question)
 
     if len(top_results) == 0:
-        # print("No relevant results found.")
         return jsonify({"error": "No relevant results found"}), 404
 
     answer = refine_and_answer_with_groq(question, top_results)
@@ -427,5 +426,4 @@ def chat():
 
 
 if __name__ == '__main__':
-    print("Starting Flask API on port 3002")
     app.run(host='0.0.0.0', port=3002)

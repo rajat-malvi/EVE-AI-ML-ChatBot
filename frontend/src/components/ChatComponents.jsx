@@ -7,7 +7,7 @@ import {
   ThumbsUp,
   Trash2,
   User,
-  Volume2
+  Volume2,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/Button";
@@ -15,7 +15,7 @@ import { Card } from "./ui/Card";
 import {
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger, 
+  CollapsibleTrigger,
 } from "./ui/collapsible";
 import { useChat } from "./useChat";
 
@@ -58,26 +58,23 @@ export function ChatThread({ thread, isSelected, onRename, onDelete, onClick }) 
 export function AlternativeResponse({ response, index, isOpen, onToggle }) {
   const [likes, setLikes] = useState(0);
   const [dislikes, setDislikes] = useState(0);
-  // console.log("responce is ", response);
-  
+  const [userInteraction, setUserInteraction] = useState(null); // Tracks user's action: 'like', 'dislike', or null
+
   const responseDetails = {
     auther: response.allFields[1],
     book: response.allFields[2],
-    link:response.allFields[3],
+    link: response.allFields[3],
     chapter: response.allFields[4] + " and Chapter No. " + response.allFields[5],
     page: response.allFields[6] + ", Paragraph: " + response.allFields[7],
-    context:response.allFields[8],
-    topic:response.allFields[9],
-    similarity: response.allFields[10]*100,
+    context: response.allFields[8],
+    topic: response.allFields[9],
+    similarity: response.allFields[10] * 100,
   };
-
-//   const copyToClipboard = (text) => navigator.clipboard.writeText(text);
 
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text).then(
       () => {
         alert("Text copied to clipboard!");
-        // console.alert("Text copied to clipboard!")
       },
       (err) => {
         console.error("Could not copy text: ", err);
@@ -88,6 +85,36 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
   const speakText = (text) => {
     const speech = new SpeechSynthesisUtterance(text);
     window.speechSynthesis.speak(speech);
+  };
+
+  const handleLike = () => {
+    if (userInteraction === "like") {
+      // If already liked, undo like
+      setLikes((prev) => prev - 1);
+      setUserInteraction(null);
+    } else {
+      // Like and undo dislike if it was pressed
+      setLikes((prev) => prev + 1);
+      if (userInteraction === "dislike") {
+        setDislikes((prev) => prev - 1);
+      }
+      setUserInteraction("like");
+    }
+  };
+
+  const handleDislike = () => {
+    if (userInteraction === "dislike") {
+      // If already disliked, undo dislike
+      setDislikes((prev) => prev - 1);
+      setUserInteraction(null);
+    } else {
+      // Dislike and undo like if it was pressed
+      setDislikes((prev) => prev + 1);
+      if (userInteraction === "like") {
+        setLikes((prev) => prev - 1);
+      }
+      setUserInteraction("dislike");
+    }
   };
 
   return (
@@ -115,18 +142,20 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
               <strong>Page:</strong> {responseDetails.page}
             </p>
             <p>
-              <strong>Link:</strong> <a href={responseDetails.link} className="blue">link</a>
+              <strong>Link:</strong> <a href={responseDetails.link}>link</a>
             </p>
             <p>
-              <strong>Similarity:</strong> {responseDetails.similarity} 
+              <strong>Similarity:</strong> {responseDetails.similarity}%
             </p>
           </div>
           <div className="flex justify-end mt-2 space-x-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setLikes(likes + 1)}
-              className="text-blue-500 border-blue-500 hover:bg-blue-100"
+              onClick={handleLike}
+              className={`text-blue-500 border-blue-500 ${
+                userInteraction === "like" ? "bg-blue-100" : "hover:bg-blue-100"
+              }`}
             >
               <ThumbsUp className="h-4 w-4 mr-1" />
               {likes}
@@ -134,8 +163,10 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setDislikes(dislikes + 1)}
-              className="text-blue-500 border-blue-500 hover:bg-red-100"
+              onClick={handleDislike}
+              className={`text-red-500 border-red-500 ${
+                userInteraction === "dislike" ? "bg-red-100" : "hover:bg-red-100"
+              }`}
             >
               <ThumbsDown className="h-4 w-4 mr-1" />
               {dislikes}
@@ -143,7 +174,7 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyToClipboard(response)}
+              onClick={() => copyToClipboard(response.context)}
               className="text-gray-500 border-gray-500 hover:bg-gray-100"
             >
               <Copy className="h-4 w-4" />
@@ -151,7 +182,7 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => speakText(response)}
+              onClick={() => speakText(response.context)}
               className="text-gray-500 border-gray-500 hover:bg-gray-100"
             >
               <Volume2 className="h-4 w-4" />
@@ -162,6 +193,8 @@ export function AlternativeResponse({ response, index, isOpen, onToggle }) {
     </Collapsible>
   );
 }
+
+// Keep the rest of the code as it is.
 
 export function MessageList({ messages }) {
   const { copyToClipboard, speakText } = useChat();
